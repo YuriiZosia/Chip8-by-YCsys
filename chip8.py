@@ -268,10 +268,19 @@ class Chip8:
             else:
                 print_debug_info(f"Умова 9XY0 не виконана: V{x} == V{y}.")
 
-
-        elif t == 0xA: # ANNN: I = NNN
+        elif t == 0xA: # ANNN: I = NNN Це просто встановлення вказівника на дані
             self.index_register = nnn
             print_debug_info(f"I встановлено на {hex(nnn)}")
+
+        elif t == 0xB: # BNNN: PC = NNN + V0 Процесор стрибає не просто на адресу nnn, а додає до неї значення з V0. Це такий собі «динамічний перехід»
+            self.pc = (nnn + self.v_registers[0]) & 0xFFF
+            print_debug_info(f"PC змінено на {hex((nnn + self.v_registers[0]) & 0xFFF)} (NNN + V0)")
+
+        elif t == 0xC: # CXNN: Vx = rand() & NN random.randint(0, 255) дає нам випадковий байт, а маска & nn дозволяє грі контролювати діапазон цього хаосу. Без цієї команди Тетріс би завжди видавав однакові фігури.
+            rand_val = random.randint(0, 255)
+            self.v_registers[x] = rand_val & nn
+            print_debug_info(f"V{x} встановлено в {hex(self.v_registers[x])} (рандом: {hex(rand_val)})")
+
 
 def select_rom():
     # Функція для вибору ROM-файлу за допомогою діалогового вікна
