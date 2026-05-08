@@ -169,7 +169,7 @@ class Chip8:
             self.v_registers[x] = (self.v_registers[x] + nn) & 0xFF
             print_debug_info(f"До V{x} додано {hex(nn)}")
 
-        elif t == 0x8:
+        elif t == 0x8: # Різні математичні та логічні операції між Vx та Vy, залежно від останнього півбайта (n)
             if n == 0x0: 
                 # 8XY0: Присвоєння значення одного регістра іншому
                 self.v_registers[x] = self.v_registers[y]
@@ -203,7 +203,7 @@ class Chip8:
                 # Записуємо тільки молодші 8 біт (залишок від 256)
                 self.v_registers[x] = sum_val & 0xFF
                 print_debug_info(f"8XY4: V{x} += V{y}, Carry Flag (VF) = {self.v_registers[0xF]}")
-            
+
             elif n == 0x5:
                 # 8XY5: V[x] = V[x] - V[y]
                 # 1. Визначаємо прапорець (VF) ДО віднімання
@@ -221,6 +221,52 @@ class Chip8:
                 # 4. Оновлюємо прапорець
                 self.v_registers[0xF] = not_borrow
                 print_debug_info(f"8XY5: V{x} -= V{y}, NOT Borrow (VF) = {not_borrow}")
+
+            elif n == 0x6:
+                # 8XY6: Зсув вправо
+                # Беремо найменший біт
+                self.v_registers[0xF] = self.v_registers[x] & 0x1
+                self.v_registers[x] >>= 1
+                print_debug_info(f"8XY6: V{x} >>= 1, VF = {self.v_registers[0xF]}")
+
+            elif n == 0xE:
+                # 8XYE: Зсув вліво
+                # Беремо найстарший біт (7-й біт)
+                self.v_registers[0xF] = (self.v_registers[x] >> 7) & 0x1
+                # Зсуваємо і відсікаємо зайве
+                self.v_registers[x] = (self.v_registers[x] << 1) & 0xFF
+                print_debug_info(f"8XYE: V{x} <<= 1, VF = {self.v_registers[0xF]}")
+
+            elif n == 0x7:
+                # 8XY7: Vx = Vy - Vx
+                # 1. Визначаємо прапорець (якщо Vy >= Vx, то VF = 1)
+                if self.v_registers[y] >= self.v_registers[x]:
+                    flag = 1
+                else:
+                    flag = 0
+
+                # 2. Обчислюємо результат
+                result = self.v_registers[y] - self.v_registers[x]
+                
+                # 3. Записуємо результат у Vx
+                self.v_registers[x] = result & 0xFF
+                
+                # 4. Присвоюємо прапорець регістру VF
+                self.v_registers[0xF] = flag
+                
+                print_debug_info(f"8XY7: V{x} = V{y} - V{x}, VF = {flag}")
+        elif t == 0x9: # 9XY0: Пропускати наступну команду, якщо Vx != Vy
+            if n != 0:
+                print_debug_info(f"Невідомий код команди: {hex(opcode)}. Пропускаємо.")
+                print_debug_info(f"Очікувалося, що останній півбайт буде 0, але отримано {hex(n)}. Пропускаємо команду.")
+                print_debug_info("Це може бути помилка в коді гри/емулятора. Пропускаємо виконання цієї команди.")
+
+                return
+            if self.v_registers[x] != self.v_registers[y]:
+                self.pc += 2
+                print_debug_info(f"Умова 9XY0 виконана: V{x} != V{y}. Пропускаємо наступну команду.")
+            else:
+                print_debug_info(f"Умова 9XY0 не виконана: V{x} == V{y}.")
 
 
         elif t == 0xA: # ANNN: I = NNN
@@ -246,7 +292,7 @@ if __name__ == "__main__":
     chip8 = Chip8()
     chip8.load_rom(selected_file)  # selected_file - це шлях до вашого ROM-файлу
     # виконаємо 5 циклів для перевірки
-    for _ in range(5):
+    for _ in range(20):
         chip8.cycle()
 
 input("Натисніть Enter, щоб вийти...")
