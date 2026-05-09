@@ -397,6 +397,7 @@ if __name__ == "__main__":
     SCALE = 15
     WIDTH = 64 * SCALE
     HEIGHT = 32 * SCALE
+    paused = False  # Змінна стану для паузи
     
     screen = pygame.display.set_mode((WIDTH, HEIGHT))
     pygame.display.set_caption("YCsys CHIP-8 [CYBERPUNK EDITION]")
@@ -442,26 +443,34 @@ if __name__ == "__main__":
                     chip8.keys[KEY_MAP[event.key]] = 1
                 if event.key == pygame.K_ESCAPE:
                     running = False
+                
+                # Додаємо обробку паузи на клавішу пробілу
+                if event.key == pygame.K_SPACE:
+                    paused = not paused
+                    status = "ПАУЗА" if paused else "ГРА"
+                    print_debug_info(f">> Стан системи: {status}")
             
             if event.type == pygame.KEYUP:
                 if event.key in KEY_MAP:
                     chip8.keys[KEY_MAP[event.key]] = 0
 
-        # Швидкість гри (10 інструкцій на кадр)
-        for _ in range(10): 
-            chip8.cycle()
+        # Виконуємо логіку процесора ТІЛЬКИ якщо не на паузі
+        if not paused:
+            # Швидкість гри (10 інструкцій на кадр)
+            for _ in range(10): 
+                chip8.cycle()
 
-        # Робота таймерів
-        if chip8.delay_timer > 0:
-            chip8.delay_timer -= 1
-            
-        if chip8.sound_timer > 0:
-            # Якщо таймер звуку активний і звук ще не грає — запускаємо біп
-            if not pygame.mixer.get_busy():
-                beep_sound.play()
-            chip8.sound_timer -= 1
+            # Робота таймерів
+            if chip8.delay_timer > 0:
+                chip8.delay_timer -= 1
+                
+            if chip8.sound_timer > 0:
+                # Якщо таймер звуку активний і звук ще не грає — запускаємо біп
+                if not pygame.mixer.get_busy():
+                    beep_sound.play()
+                chip8.sound_timer -= 1
 
-        # --- РЕНДЕРИНГ КІБЕРПАНКУ ---
+        # --- РЕНДЕРИНГ КІБЕРПАНКУ (працює завжди, щоб екран не зникав на паузі) ---
         
         # 1. Ефект "шлейфу". Замість screen.fill ми накладаємо напівпрозорий фон
         screen.blit(trail_surface, (0, 0))
