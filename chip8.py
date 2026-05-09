@@ -344,13 +344,49 @@ def select_rom():
     file_path = filedialog.askopenfilename(title="Виберіть ROM-файл", filetypes=[("All Files", "*.ch8")])
     return file_path
 
+# Налаштування вікна
+SCALE = 15  # Кожен піксель Chip-8 буде як 15x15 справжніх пікселів
+WIDTH = 64 * SCALE
+HEIGHT = 32 * SCALE
+
 if __name__ == "__main__":
     loading() 
     selected_file = select_rom()
     print(f"Ви вибрали файл: {selected_file}")
     chip8 = Chip8()
     chip8.load_rom(selected_file) 
-    for _ in range(20):
-        chip8.cycle()
+    pygame.init()
+    screen = pygame.display.set_mode((WIDTH, HEIGHT))
+    pygame.display.set_caption("YCsys CHIP-8 Emulator")
+    clock = pygame.time.Clock() # Для контролю швидкості роботи програми
+    running = True
+    while running:
+        # 1. Обробка подій (закриття вікна)
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
 
-input("Натисніть Enter, щоб вийти...")
+        # 2. Виконання циклу процесора
+        # Для комфортної гри треба робити кілька циклів за один кадр
+        for _ in range(10): 
+            chip8.cycle()
+
+        # 3. Оновлення таймерів (60 разів на секунду)
+        if chip8.delay_timer > 0:
+            chip8.delay_timer -= 1
+        if chip8.sound_timer > 0:
+            chip8.sound_timer -= 1
+
+        # 4. Малювання екрана
+        screen.fill((0, 0, 0)) # Очищаємо екран в чорний
+        for x in range(64):
+            for y in range(32):
+                if chip8.display[x][y] == 1:
+                    # Малюємо квадрат (піксель) кольору "Neon Green" або "Cyberpunk Purple"
+                    pygame.draw.rect(screen, (0, 255, 65), (x * SCALE, y * SCALE, SCALE, SCALE))
+
+        pygame.display.flip() # Виводимо все намальоване на монітор
+        clock.tick(60)        # Обмежуємо до 60 кадрів на секунду
+
+    print("Програма завершує роботу...") ; time.sleep(2)
+    pygame.quit()
