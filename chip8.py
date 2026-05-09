@@ -131,7 +131,7 @@ class Chip8:
             self.memory[0x200:0x200+len(rom_data)] = rom_data
 
     def cycle(self):
-        # 1. Зчитування (це в тебе працює добре)
+        # 1. Зчитування
         byte1 = self.memory[self.pc]
         byte2 = self.memory[self.pc + 1]
         opcode = (byte1 << 8) | byte2 # Об'єднуємо два байти в одну 16-бітну команду
@@ -144,287 +144,212 @@ class Chip8:
         n = opcode & 0xF          # 4 біти
         nn = opcode & 0x00FF      # 8 біт
         nnn = opcode & 0x0FFF     # 12 біт
+        
+        # Спеціальне форматування {x:X} виводить V10 як VA, V15 як VF
         print_debug_info(f"Зчитано команду: {hex(opcode)} (t={hex(t)}, x={hex(x)}, y={hex(y)}, n={hex(n)}, nn={hex(nn)}, nnn={hex(nnn)})")
 
         # 3. Логіка виконання (по одній команді за раз)
         
         if t == 0x0:
             if nnn == 0x0E0:
-                # Очищення екрана
+                # 00E0: Очищення екрана
                 self.display = [[0] * 32 for _ in range(64)]
-                print_debug_info("Екран очищено")
+                print_debug_info("00E0: Екран очищено")
             elif nnn == 0x0EE:
-                # Повернення з підпрограми
+                # 00EE: Повернення з підпрограми
                 self.pc = self.stack.pop()
-                print_debug_info("Повернення зі стеку")
+                print_debug_info(f"00EE: Повернення зі стеку на адресу {hex(self.pc)}")
 
         elif t == 0x1: # 1NNN: Стрибок на адресу NNN
             self.pc = nnn
-            print_debug_info(f"Стрибок на {hex(nnn)}")
+            print_debug_info(f"1NNN: Стрибок на {hex(nnn)}")
+
+        elif t == 0x2: # 2NNN: Виклик підпрограми (Додано!)
+            self.stack.append(self.pc) # Зберігаємо поточну адресу повернення
+            self.pc = nnn # Переходимо до підпрограми
+            print_debug_info(f"2NNN: Виклик підпрограми за адресою {hex(nnn)}")
 
         elif t == 0x3: # 3XNN: Пропускати наступну команду, якщо Vx == NN
             if self.v_registers[x] == nn:
                 self.pc += 2
-                print_debug_info(f"Умова 3XNN виконана: V{x} == {hex(nn)}. Пропускаємо наступну команду.")
+                print_debug_info(f"3XNN виконано: V{x:X} == {hex(nn)}. Пропускаємо наступну команду.")
             else:
-                print_debug_info(f"Умова 3XNN не виконана: V{x} != {hex(nn)}.")
+                print_debug_info(f"3XNN проігноровано: V{x:X} != {hex(nn)}.")
 
         elif t == 0x4: # 4XNN: Пропускати наступну команду, якщо Vx != NN
             if self.v_registers[x] != nn:
                 self.pc += 2
-                print_debug_info(f"Умова 4XNN виконана: V{x} != {hex(nn)}. Пропускаємо наступну команду.")
+                print_debug_info(f"4XNN виконано: V{x:X} != {hex(nn)}. Пропускаємо наступну команду.")
             else:
-                print_debug_info(f"Умова 4XNN не виконана: V{x} == {hex(nn)}.")
+                print_debug_info(f"4XNN проігноровано: V{x:X} == {hex(nn)}.")
         
         elif t == 0x5: # 5XY0: Пропускати наступну команду, якщо Vx == Vy
-
             if n != 0:
                 print_debug_info(f"Невідомий код команди: {hex(opcode)}. Пропускаємо.")
-                print_debug_info(f"Очікувалося, що останній півбайт буде 0, але отримано {hex(n)}. Пропускаємо команду.")
-                print_debug_info("Це може бути помилка в коді гри/емулятора. Пропускаємо виконання цієї команди.")
-
                 return
             if self.v_registers[x] == self.v_registers[y]:
                 self.pc += 2
-                print_debug_info(f"Умова 5XY0 виконана: V{x} == V{y}. Пропускаємо наступну команду.")
+                print_debug_info(f"5XY0 виконано: V{x:X} == V{y:X}. Пропускаємо наступну команду.")
             else:
-                print_debug_info(f"Умова 5XY0 не виконана: V{x} != V{y}.")
+                print_debug_info(f"5XY0 проігноровано: V{x:X} != V{y:X}.")
 
         elif t == 0x6: # 6XNN: Встановити Vx = NN
             self.v_registers[x] = nn
-            print_debug_info(f"V{x} встановлено в {hex(nn)}")
+            print_debug_info(f"6XNN: V{x:X} встановлено в {hex(nn)}")
 
         elif t == 0x7: # 7XNN: Додати NN до Vx (без прапорця переносу)
             self.v_registers[x] = (self.v_registers[x] + nn) & 0xFF
-            print_debug_info(f"До V{x} додано {hex(nn)}")
+            print_debug_info(f"7XNN: До V{x:X} додано {hex(nn)}")
 
-        elif t == 0x8: # Різні математичні та логічні операції між Vx та Vy, залежно від останнього півбайта (n)
+        elif t == 0x8: # Математичні та логічні операції
             if n == 0x0: 
-                # 8XY0: Присвоєння значення одного регістра іншому
                 self.v_registers[x] = self.v_registers[y]
-                print_debug_info(f"8XY0: V{x} скопійовано з V{y} (Значення: {hex(self.v_registers[x])})")
-
+                print_debug_info(f"8XY0: V{x:X} скопійовано з V{y:X} (Значення: {hex(self.v_registers[x])})")
             elif n == 0x1:
-                # 8XY1: Бітове АБО (якщо хоча б один біт = 1)
                 self.v_registers[x] |= self.v_registers[y]
-                print_debug_info(f"8XY1: V{x} = V{x} OR V{y} (Результат: {hex(self.v_registers[x])})")
-
+                print_debug_info(f"8XY1: V{x:X} |= V{y:X} (Результат: {hex(self.v_registers[x])})")
             elif n == 0x2:
-                # 8XY2: Бітове І (тільки якщо обидва біти = 1)
                 self.v_registers[x] &= self.v_registers[y]
-                print_debug_info(f"8XY2: V{x} = V{x} AND V{y} (Результат: {hex(self.v_registers[x])})")
-
+                print_debug_info(f"8XY2: V{x:X} &= V{y:X} (Результат: {hex(self.v_registers[x])})")
             elif n == 0x3:
-                # 8XY3: Бітове XOR (якщо біти різні)
                 self.v_registers[x] ^= self.v_registers[y]
-                print_debug_info(f"8XY3: V{x} = V{x} XOR V{y} (Результат: {hex(self.v_registers[x])})")
-
+                print_debug_info(f"8XY3: V{x:X} ^= V{y:X} (Результат: {hex(self.v_registers[x])})")
             elif n == 0x4:
-                # 8XY4: Додавання з прапорцем переносу (Carry Flag)
                 sum_val = self.v_registers[x] + self.v_registers[y]
-                
-                # Якщо сума > 255 (FF), встановлюємо VF = 1
-                if sum_val > 0xFF:
-                    self.v_registers[0xF] = 1
-                else:
-                    self.v_registers[0xF] = 0
-                
-                # Записуємо тільки молодші 8 біт (залишок від 256)
+                self.v_registers[0xF] = 1 if sum_val > 0xFF else 0
                 self.v_registers[x] = sum_val & 0xFF
-                print_debug_info(f"8XY4: V{x} += V{y}, Carry Flag (VF) = {self.v_registers[0xF]}")
-
+                print_debug_info(f"8XY4: V{x:X} += V{y:X}, Carry Flag (VF) = {self.v_registers[0xF]}")
             elif n == 0x5:
-                # 8XY5: V[x] = V[x] - V[y]
-                # 1. Визначаємо прапорець (VF) ДО віднімання
-                if self.v_registers[x] >= self.v_registers[y]:
-                    not_borrow = 1
-                else:
-                    not_borrow = 0
-                
-                # 2. Робимо віднімання
-                result = self.v_registers[x] - self.v_registers[y]
-                
-                # 3. Записуємо результат (тримаємо в межах 0-255)
-                self.v_registers[x] = result & 0xFF
-                
-                # 4. Оновлюємо прапорець
+                not_borrow = 1 if self.v_registers[x] >= self.v_registers[y] else 0
+                self.v_registers[x] = (self.v_registers[x] - self.v_registers[y]) & 0xFF
                 self.v_registers[0xF] = not_borrow
-                print_debug_info(f"8XY5: V{x} -= V{y}, NOT Borrow (VF) = {not_borrow}")
-
+                print_debug_info(f"8XY5: V{x:X} -= V{y:X}, NOT Borrow (VF) = {not_borrow}")
             elif n == 0x6:
-                # 8XY6: Зсув вправо
-                # Беремо найменший біт
                 self.v_registers[0xF] = self.v_registers[x] & 0x1
                 self.v_registers[x] >>= 1
-                print_debug_info(f"8XY6: V{x} >>= 1, VF = {self.v_registers[0xF]}")
-
+                print_debug_info(f"8XY6: V{x:X} >>= 1, VF = {self.v_registers[0xF]}")
             elif n == 0xE:
-                # 8XYE: Зсув вліво
-                # Беремо найстарший біт (7-й біт)
                 self.v_registers[0xF] = (self.v_registers[x] >> 7) & 0x1
-                # Зсуваємо і відсікаємо зайве
                 self.v_registers[x] = (self.v_registers[x] << 1) & 0xFF
-                print_debug_info(f"8XYE: V{x} <<= 1, VF = {self.v_registers[0xF]}")
-
+                print_debug_info(f"8XYE: V{x:X} <<= 1, VF = {self.v_registers[0xF]}")
             elif n == 0x7:
-                # 8XY7: Vx = Vy - Vx
-                # 1. Визначаємо прапорець (якщо Vy >= Vx, то VF = 1)
-                if self.v_registers[y] >= self.v_registers[x]:
-                    flag = 1
-                else:
-                    flag = 0
-
-                # 2. Обчислюємо результат
-                result = self.v_registers[y] - self.v_registers[x]
-                
-                # 3. Записуємо результат у Vx
-                self.v_registers[x] = result & 0xFF
-                
-                # 4. Присвоюємо прапорець регістру VF
+                flag = 1 if self.v_registers[y] >= self.v_registers[x] else 0
+                self.v_registers[x] = (self.v_registers[y] - self.v_registers[x]) & 0xFF
                 self.v_registers[0xF] = flag
-                
-                print_debug_info(f"8XY7: V{x} = V{y} - V{x}, VF = {flag}")
-        elif t == 0x9: # 9XY0: Пропускати наступну команду, якщо Vx != Vy
-            if n != 0:
-                print_debug_info(f"Невідомий код команди: {hex(opcode)}. Пропускаємо.")
-                print_debug_info(f"Очікувалося, що останній півбайт буде 0, але отримано {hex(n)}. Пропускаємо команду.")
-                print_debug_info("Це може бути помилка в коді гри/емулятора. Пропускаємо виконання цієї команди.")
+                print_debug_info(f"8XY7: V{x:X} = V{y:X} - V{x:X}, VF = {flag}")
 
-                return
+        elif t == 0x9: # 9XY0: Пропускати наступну команду, якщо Vx != Vy
+            if n != 0: return
             if self.v_registers[x] != self.v_registers[y]:
                 self.pc += 2
-                print_debug_info(f"Умова 9XY0 виконана: V{x} != V{y}. Пропускаємо наступну команду.")
-            else:
-                print_debug_info(f"Умова 9XY0 не виконана: V{x} == V{y}.")
+                print_debug_info(f"9XY0 виконано: V{x:X} != V{y:X}. Пропускаємо наступну команду.")
 
-        elif t == 0xA: # ANNN: I = NNN Це просто встановлення вказівника на дані
+        elif t == 0xA: # ANNN: I = NNN
             self.index_register = nnn
-            print_debug_info(f"I встановлено на {hex(nnn)}")
+            print_debug_info(f"ANNN: I встановлено на {hex(nnn)}")
 
-        elif t == 0xB: # BNNN: PC = NNN + V0 Процесор стрибає не просто на адресу nnn, а додає до неї значення з V0. Це такий собі «динамічний перехід»
+        elif t == 0xB: # BNNN: PC = NNN + V0
             self.pc = (nnn + self.v_registers[0]) & 0xFFF
-            print_debug_info(f"PC змінено на {hex((nnn + self.v_registers[0]) & 0xFFF)} (NNN + V0)")
+            print_debug_info(f"BNNN: PC змінено на {hex(self.pc)}")
 
-        elif t == 0xC: # CXNN: Vx = rand() & NN random.randint(0, 255) дає нам випадковий байт, а маска & nn дозволяє грі контролювати діапазон цього хаосу. Без цієї команди Тетріс би завжди видавав однакові фігури.
+        elif t == 0xC: # CXNN: Vx = rand() & NN
             rand_val = random.randint(0, 255)
             self.v_registers[x] = rand_val & nn
-            print_debug_info(f"V{x} встановлено в {hex(self.v_registers[x])} (рандом: {hex(rand_val)})")
+            print_debug_info(f"CXNN: V{x:X} встановлено в {hex(self.v_registers[x])} (рандом: {hex(rand_val)})")
 
-        elif t == 0xD:
-            # 1. Початкові координати (беремо остачу від ділення, щоб не вийти за екран)
+        elif t == 0xD: # DXYN: Малювання
             x_pos = self.v_registers[x] % 64
             y_pos = self.v_registers[y] % 32
-            
-            # 2. Скидаємо прапорець зіткнень VF в 0
             self.v_registers[0xF] = 0
-            
-            # 3. Цикл по рядках спрайта (n — це висота, яку ми витягли з opcode)
             for row in range(n):
-                # Отримуємо байт спрайта з пам'яті
                 sprite_byte = self.memory[self.index_register + row]
-                
-                # 4. Цикл по 8 бітах цього байта
                 for col in range(8):
-                    # Перевіряємо, чи поточний біт спрайта дорівнює 1
-                    # (0x80 >> col) — це маска, яка рухається зліва направо по байту
                     if (sprite_byte & (0x80 >> col)) != 0:
-                        
-                        # Координати з урахуванням зміщення (row та col)
                         final_x = (x_pos + col) % 64
                         final_y = (y_pos + row) % 32
-                        
-                        # Перевіряємо на зіткнення: якщо на екрані вже є піксель (1)
                         if self.display[final_x][final_y] == 1:
-                            self.v_registers[0xF] = 1 # Є зіткнення!
-                        
-                        # Малюємо через XOR (1 стає 0, 0 стає 1)
+                            self.v_registers[0xF] = 1 
                         self.display[final_x][final_y] ^= 1
-            
-            print_debug_info(f"0xDXYN: Намальовано спрайт ({n} рядків) у позиції ({x_pos}, {y_pos}). VF={self.v_registers[0xF]}")
+            print_debug_info(f"DXYN: Намальовано спрайт ({n} рядків) у ({x_pos}, {y_pos}). VF={self.v_registers[0xF]}")
 
-        elif t == 0xE: # EX9E, EXA1: Робота з клавіатурою
-            # Отримуємо код клавіші з регістра Vx
+        elif t == 0xE: # Клавіатура
             key_code = self.v_registers[x]
-
-            if nn == 0x9E: # EX9E: Пропустити команду, якщо клавіша натиснута
+            if nn == 0x9E:
                 if self.keys[key_code] == 1:
                     self.pc += 2
                     print_debug_info(f"EX9E: Клавіша {hex(key_code)} натиснута. Skip.")
-                else:
-                    print_debug_info(f"EX9E: Клавіша {hex(key_code)} НЕ натиснута.")
-
-            elif nn == 0xA1: # EXA1: Пропустити команду, якщо клавіша НЕ натиснута
+            elif nn == 0xA1:
                 if self.keys[key_code] == 0:
                     self.pc += 2
                     print_debug_info(f"EXA1: Клавіша {hex(key_code)} вільна. Skip.")
-                else:
-                    print_debug_info(f"EXA1: Клавіша {hex(key_code)} натиснута.")
 
-        elif t == 0xF: # Різні операції, залежно від останнього півбайта (nn)
+        elif t == 0xF: # Таймери та Утиліти
             if nn == 0x07:
                 self.v_registers[x] = self.delay_timer
-                print_debug_info(f"FX07: V{x} отримав значення таймера затримки")
+                print_debug_info(f"FX07: V{x:X} отримав значення таймера затримки ({self.delay_timer})")
             
+            elif nn == 0x0A: # FX0A: Очікування натискання клавіші (Додано!)
+                pressed = False
+                for i in range(16):
+                    if self.keys[i] == 1:
+                        self.v_registers[x] = i
+                        pressed = True
+                        break
+                if not pressed:
+                    self.pc -= 2 # Якщо нічого не натиснуто, процесор "топчеться" на місці
+                else:
+                    print_debug_info(f"FX0A: Клавіша {hex(self.v_registers[x])} натиснута, збережено у V{x:X}")
+
             elif nn == 0x15:
                 self.delay_timer = self.v_registers[x]
-                print_debug_info(f"FX15: Таймер затримки встановлено на V{x}")
+                print_debug_info(f"FX15: Таймер затримки встановлено на {self.delay_timer}")
             
             elif nn == 0x18:
                 self.sound_timer = self.v_registers[x]
-                print_debug_info(f"FX18: Звуковий таймер встановлено на V{x}")
+                print_debug_info(f"FX18: Звуковий таймер встановлено на {self.sound_timer}")
 
             elif nn == 0x1E:
-                self.index_register = (self.index_register + self.v_registers[x]) & 0xFFFF # зробив класичним додаванням, бо у Python числа "гумові", тому замість переповнення отримаю >= 0x10000
-                print_debug_info(f"FX1E: I += V{x} ({self.v_registers[x]}). Нове значення I: {hex(self.index_register)}")
+                self.index_register = (self.index_register + self.v_registers[x]) & 0xFFFF
+                print_debug_info(f"FX1E: I += V{x:X}. Нове значення I: {hex(self.index_register)}")
 
             elif nn == 0x29:
-                # Беремо тільки молодші 4 біти (0-15), бо в наборі лише 16 символів
                 character = self.v_registers[x] & 0x0F
                 self.index_register = 0x50 + (character * 5)
-                
-                print_debug_info(f"FX29: Встановлено I на адресу шрифту для символу {hex(character)}: {hex(self.index_register)}")
+                print_debug_info(f"FX29: I вказує на шрифт символу {hex(character)} (адреса {hex(self.index_register)})")
 
             elif nn == 0x33:
-                # FX33: BCD розкладання
                 value = self.v_registers[x]
-                self.memory[self.index_register] = value // 100          # Сотні
-                self.memory[self.index_register + 1] = (value // 10) % 10 # Десятки
-                self.memory[self.index_register + 2] = value % 10         # Одиниці
+                self.memory[self.index_register] = value // 100
+                self.memory[self.index_register + 1] = (value // 10) % 10
+                self.memory[self.index_register + 2] = value % 10
                 print_debug_info(f"FX33: BCD для {value} -> {value//100}, {(value//10)%10}, {value%10}")
 
             elif nn == 0x55:
-                # FX55: Dump регістрів V0...Vx (включно, тому x + 1)
                 count = x + 1
                 start = self.index_register
                 self.memory[start : start + count] = self.v_registers[0 : count]
-                print_debug_info(f"FX55: Збережено регістри V0-V{x} у пам'ять")
+                print_debug_info(f"FX55: Збережено регістри V0-V{x:X} у пам'ять")
 
             elif nn == 0x65:
-                # FX65: Load регістрів V0...Vx
                 count = x + 1
                 start = self.index_register
                 self.v_registers[0 : count] = self.memory[start : start + count]
-                print_debug_info(f"FX65: Завантажено регістри V0-V{x} з пам'яті")
+                print_debug_info(f"FX65: Завантажено регістри V0-V{x:X} з пам'яті")
 
 def select_rom():
-    # Функція для вибору ROM-файлу за допомогою діалогового вікна
     import tkinter as tk
     from tkinter import filedialog
-
     root = tk.Tk()
-    root.withdraw()  # Сховати головне вікно
-
+    root.withdraw() 
     file_path = filedialog.askopenfilename(title="Виберіть ROM-файл", filetypes=[("All Files", "*.ch8")])
     return file_path
 
-# Проведемо тест передаваного коду
 if __name__ == "__main__":
-    loading()  # Показуємо анімацію завантаження
+    loading() 
     selected_file = select_rom()
     print(f"Ви вибрали файл: {selected_file}")
     chip8 = Chip8()
-    chip8.load_rom(selected_file)  # selected_file - це шлях до вашого ROM-файлу
-    # виконаємо 5 циклів для перевірки
+    chip8.load_rom(selected_file) 
     for _ in range(20):
         chip8.cycle()
 
