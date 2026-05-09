@@ -119,14 +119,16 @@ class Chip8:
         ]
         
         # Завантажуємо шрифт у самісінький початок пам'яті
-        for i in range(len(fontset)):
-            self.memory[i] = fontset[i]
+        self.memory[0x50:0x50+len(fontset)] = fontset # використовуємо зріз для копіювання шрифту в пам'ять
+        
 
     def load_rom(self, filename):
         with open(filename, "rb") as f:
             rom_data = f.read() # Зчитали один раз у змінну
-            for i in range(len(rom_data)):
-                self.memory[0x200 + i] = rom_data[i]
+            # пперевіримо чи розмір ROM не перевищує доступну пам'ять (від 0x200 до 0xFFF)
+            if len(rom_data) > (0xFFF - 0x200 + 1):
+                raise ValueError("ROM занадто великий для завантаження в пам'ять CHIP-8.")
+            self.memory[0x200:0x200+len(rom_data)] = rom_data
 
     def cycle(self):
         # 1. Зчитування (це в тебе працює добре)
