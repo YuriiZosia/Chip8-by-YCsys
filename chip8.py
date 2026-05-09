@@ -91,9 +91,36 @@ class Chip8:
         # Це як хлібні крихти, щоб знайти шлях назад
         self.stack = []
 
+        # Стан клавіш: 16 кнопок (від 0 до F). 0 — відпущена, 1 — натиснута.
+        self.keys = [0] * 16
+
         # Таймери: Затримка та звук. Зменшуються автоматично 60 разів на секунду
         self.delay_timer = 0
         self.sound_timer = 0
+
+        # Стандартний шрифт CHIP-8 (80 байт)
+        fontset = [
+            0xF0, 0x90, 0x90, 0x90, 0xF0, # 0
+            0x20, 0x60, 0x20, 0x20, 0x70, # 1
+            0xF0, 0x10, 0xF0, 0x80, 0xF0, # 2
+            0xF0, 0x10, 0xF0, 0x10, 0xF0, # 3
+            0x90, 0x90, 0xF0, 0x10, 0x10, # 4
+            0xF0, 0x80, 0xF0, 0x10, 0xF0, # 5
+            0xF0, 0x80, 0xF0, 0x90, 0xF0, # 6
+            0xF0, 0x10, 0x20, 0x40, 0x40, # 7
+            0xF0, 0x90, 0xF0, 0x90, 0xF0, # 8
+            0xF0, 0x90, 0xF0, 0x10, 0xF0, # 9
+            0xF0, 0x90, 0xF0, 0x90, 0x90, # A
+            0xE0, 0x90, 0xE0, 0x90, 0xE0, # B
+            0xF0, 0x80, 0x80, 0x80, 0xF0, # C
+            0xE0, 0x90, 0x90, 0x90, 0xE0, # D
+            0xF0, 0x80, 0xF0, 0x80, 0xF0, # E
+            0xF0, 0x80, 0xF0, 0x80, 0x80  # F
+        ]
+        
+        # Завантажуємо шрифт у самісінький початок пам'яті
+        for i in range(len(fontset)):
+            self.memory[i] = fontset[i]
 
     def load_rom(self, filename):
         with open(filename, "rb") as f:
@@ -280,6 +307,56 @@ class Chip8:
             rand_val = random.randint(0, 255)
             self.v_registers[x] = rand_val & nn
             print_debug_info(f"V{x} встановлено в {hex(self.v_registers[x])} (рандом: {hex(rand_val)})")
+
+        elif t == 0xD:
+            # 1. Початкові координати (беремо остачу від ділення, щоб не вийти за екран)
+            x_pos = self.v_registers[x] % 64
+            y_pos = self.v_registers[y] % 32
+            
+            # 2. Скидаємо прапорець зіткнень VF в 0
+            self.v_registers[0xF] = 0
+            
+            # 3. Цикл по рядках спрайта (n — це висота, яку ми витягли з opcode)
+            for row in range(n):
+                # Отримуємо байт спрайта з пам'яті
+                sprite_byte = self.memory[self.index_register + row]
+                
+                # 4. Цикл по 8 бітах цього байта
+                for col in range(8):
+                    # Перевіряємо, чи поточний біт спрайта дорівнює 1
+                    # (0x80 >> col) — це маска, яка рухається зліва направо по байту
+                    if (sprite_byte & (0x80 >> col)) != 0:
+                        
+                        # Координати з урахуванням зміщення (row та col)
+                        final_x = (x_pos + col) % 64
+                        final_y = (y_pos + row) % 32
+                        
+                        # Перевіряємо на зіткнення: якщо на екрані вже є піксель (1)
+                        if self.display[final_x][final_y] == 1:
+                            self.v_registers[0xF] = 1 # Є зіткнення!
+                        
+                        # Малюємо через XOR (1 стає 0, 0 стає 1)
+                        self.display[final_x][final_y] ^= 1
+            
+            print_debug_info(f"0xDXYN: Намальовано спрайт ({n} рядків) у позиції ({x_pos}, {y_pos}). VF={self.v_registers[0xF]}")
+
+        elif t == 0xE: # EX9E, EXA1: Робота з клавіатурою
+            # Отримуємо код клавіші з регістра Vx
+            key_code = self.v_registers[x]
+
+            if nn == 0x9E: # EX9E: Пропустити команду, якщо клавіша натиснута
+                if self.keys[key_code] == 1:
+                    self.pc += 2
+                    print_debug_info(f"EX9E: Клавіша {hex(key_code)} натиснута. Skip.")
+                else:
+                    print_debug_info(f"EX9E: Клавіша {hex(key_code)} НЕ натиснута.")
+
+            elif nn == 0xA1: # EXA1: Пропустити команду, якщо клавіша НЕ натиснута
+                if self.keys[key_code] == 0:
+                    self.pc += 2
+                    print_debug_info(f"EXA1: Клавіша {hex(key_code)} вільна. Skip.")
+                else:
+                    print_debug_info(f"EXA1: Клавіша {hex(key_code)} натиснута.")
 
 
 def select_rom():
