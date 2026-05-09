@@ -384,6 +384,28 @@ class Chip8:
                 
                 print_debug_info(f"FX29: Встановлено I на адресу шрифту для символу {hex(character)}: {hex(self.index_register)}")
 
+            elif nn == 0x33:
+                # FX33: BCD розкладання
+                value = self.v_registers[x]
+                self.memory[self.index_register] = value // 100          # Сотні
+                self.memory[self.index_register + 1] = (value // 10) % 10 # Десятки
+                self.memory[self.index_register + 2] = value % 10         # Одиниці
+                print_debug_info(f"FX33: BCD для {value} -> {value//100}, {(value//10)%10}, {value%10}")
+
+            elif nn == 0x55:
+                # FX55: Dump регістрів V0...Vx (включно, тому x + 1)
+                count = x + 1
+                start = self.index_register
+                self.memory[start : start + count] = self.v_registers[0 : count]
+                print_debug_info(f"FX55: Збережено регістри V0-V{x} у пам'ять")
+
+            elif nn == 0x65:
+                # FX65: Load регістрів V0...Vx
+                count = x + 1
+                start = self.index_register
+                self.v_registers[0 : count] = self.memory[start : start + count]
+                print_debug_info(f"FX65: Завантажено регістри V0-V{x} з пам'яті")
+
 def select_rom():
     # Функція для вибору ROM-файлу за допомогою діалогового вікна
     import tkinter as tk
