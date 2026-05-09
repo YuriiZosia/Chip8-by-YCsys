@@ -360,6 +360,29 @@ class Chip8:
                 else:
                     print_debug_info(f"EXA1: Клавіша {hex(key_code)} натиснута.")
 
+        elif t == 0xF: # Різні операції, залежно від останнього півбайта (nn)
+            if nn == 0x07:
+                self.v_registers[x] = self.delay_timer
+                print_debug_info(f"FX07: V{x} отримав значення таймера затримки")
+            
+            elif nn == 0x15:
+                self.delay_timer = self.v_registers[x]
+                print_debug_info(f"FX15: Таймер затримки встановлено на V{x}")
+            
+            elif nn == 0x18:
+                self.sound_timer = self.v_registers[x]
+                print_debug_info(f"FX18: Звуковий таймер встановлено на V{x}")
+
+            elif nn == 0x1E:
+                self.index_register = (self.index_register + self.v_registers[x]) & 0xFFFF # зробив класичним додаванням, бо у Python числа "гумові", тому замість переповнення отримаю >= 0x10000
+                print_debug_info(f"FX1E: I += V{x} ({self.v_registers[x]}). Нове значення I: {hex(self.index_register)}")
+
+            elif nn == 0x29:
+                # Беремо тільки молодші 4 біти (0-15), бо в наборі лише 16 символів
+                character = self.v_registers[x] & 0x0F
+                self.index_register = 0x50 + (character * 5)
+                
+                print_debug_info(f"FX29: Встановлено I на адресу шрифту для символу {hex(character)}: {hex(self.index_register)}")
 
 def select_rom():
     # Функція для вибору ROM-файлу за допомогою діалогового вікна
