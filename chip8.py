@@ -1,69 +1,96 @@
 import random
 import time
 import sys
+import array
 import pygame  # Бібліотека для малювання екрана та звуку
 
-PRINT_DEBUG = True  # Встановіть в False, щоб вимкнути вивід відлагоджувальної інформації
-pxl = "█" # Pixel (full block), пригодиться для виводу екрану в консоль (якщо потрібно)
+PRINT_DEBUG = False  # Вивід у консоль
+DEBUG_IN_LOG_FILE = False  # Вивід у файл
+LOG_FILE_NAME = "chip8_execution.log"
 
 def print_debug_info(info):
+    # 1. Вивід у термінал (якщо увімкнено)
     if PRINT_DEBUG:
         print(info)
 
-def loading():
-    # ANSI кольори
-    YELLOW = "\033[38;2;252;213;53m"
-    GRAY = "\033[38;2;112;122;138m"
-    CYAN = "\033[36m"
-    RESET = "\033[0m"
-    CLEAR = "\033[H\033[J" # Очистка екрана
+    # 2. Запис у лог-файл (якщо увімкнено)
+    if DEBUG_IN_LOG_FILE:
+        try:
+            # Відкриваємо файл у режимі 'a' (append), щоб дописувати в кінець
+            with open(LOG_FILE_NAME, "a", encoding="utf-8") as f:
+                timestamp = time.strftime("%H:%M:%S")
+                f.write(f"[{timestamp}] {info}\n")
+        except Exception as e:
+            # Якщо виникла помилка доступу до файлу, просто виведемо її в консоль
+            if PRINT_DEBUG:
+                print(f"!! Помилка запису в лог: {e}")
 
-    ansi_logo = """
-██╗   ██╗ ██████╗███████╗██╗   ██╗███████╗
-╚██╗ ██╔╝██╔════╝██╔════╝╚██╗ ██╔╝██╔════╝
- ╚████╔╝ ██║     ███████╗ ╚████╔╝ ███████╗
-  ╚██╔╝  ██║     ╚════██║  ╚██╔╝  ╚════██║
-   ██║   ╚██████╗███████║   ██║   ███████║
-   ╚═╝    ╚═════╝╚══════╝   ╚═╝   ╚══════╝"""
-
-    print(CLEAR)
+def pygame_boot_screen(screen, clock, width, height):
+    # Кольори YCsys (Cyberpunk / Retro)
+    BG_COLOR = (10, 10, 15)       # Дуже темно-синій/сірий
+    TEXT_COLOR = (0, 255, 100)    # Неоновий зелений
+    HIGHLIGHT = (252, 213, 53)    # YCsys Жовтий
+    BAR_BG = (40, 40, 50)         # Фон прогрес-бару
     
-    # 1. Ефект появи логотипу
-    for line in ansi_logo.splitlines():
-        print(f"{YELLOW}{line}{RESET}")
-        time.sleep(0.05)
+    # Шрифти (використовуємо стандартний моноширинний шрифт)
+    pygame.font.init()
+    font_large = pygame.font.SysFont("courier", 36, bold=True)
+    font_small = pygame.font.SysFont("courier", 18)
 
-    print(f"\n{YELLOW}Yurii Code system (YCsys) © 2026. Код, що працює, а не існує.{RESET}")
-    print(f"{GRAY}{'-' * 60}{RESET}\n")
+    # Логотип (просто текст для стилістики)
+    logo_text = "YCsys CHIP-8 BIOS v1.0"
+    motto_text = "Код, що працює, а не існує."
 
-    # 2. Анімація завантаження компонентів CHIP-8
     steps = [
-        "Initializing CPU Registers (V0-VF)...",
+        "Initializing CPU Registers...",
         "Setting up 4KB Memory Map...",
-        "Clearing Display Buffer (64x32)...",
-        "Loading Fontset into Memory...",
-        "Setting up Timers (Delay/Sound)...",
-        "CHIP-8 Interpreter Ready."
+        "Clearing Display Buffer...",
+        "Loading Fontset into 0x50...",
+        "Establishing Pygame Video Link...",
+        "SYSTEM READY."
     ]
 
-    for i, step in enumerate(steps):
-        # Імітація читання адрес пам'яті
-        addr = hex(random.randint(0x200, 0xFFF)).upper()
-        
-        # Рядок прогресу
-        progress = (i + 1) / len(steps)
-        bar_length = 20
-        filled = int(progress * bar_length)
-        bar = f"{YELLOW}█{RESET}" * filled + f"{GRAY}░{RESET}" * (bar_length - filled)
-        
-        # Вивід (використовуємо \r щоб оновлювати один і той самий рядок)
-        sys.stdout.write(f"\r{CYAN}[{addr}]{RESET} {step.ljust(40)} [{bar}] {int(progress*100)}%")
-        sys.stdout.flush()
-        
-        time.sleep(random.uniform(0.3, 0.7)) # Рандомна затримка для реалізму
+    # Рендеримо статичний текст
+    logo_surf = font_large.render(logo_text, True, HIGHLIGHT)
+    motto_surf = font_small.render(motto_text, True, TEXT_COLOR)
+    
+    logo_rect = logo_surf.get_rect(center=(width//2, height//3))
+    motto_rect = motto_surf.get_rect(center=(width//2, height//3 + 40))
 
-    print(f"\n\n{YELLOW}>> SYSTEM BOOT COMPLETE. RUNNING EMULATOR...{RESET}\n")
-    time.sleep(0.5)
+    # Анімація завантаження
+    for i, step in enumerate(steps):
+        # Дозволяємо закрити вікно під час завантаження
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+
+        screen.fill(BG_COLOR)
+        
+        # Малюємо лого
+        screen.blit(logo_surf, logo_rect)
+        screen.blit(motto_surf, motto_rect)
+
+        # Малюємо поточний крок
+        step_surf = font_small.render(f"> {step}", True, TEXT_COLOR)
+        screen.blit(step_surf, (50, height//2 + 50))
+
+        # Малюємо прогрес-бар
+        progress = (i + 1) / len(steps)
+        bar_width = width - 100
+        bar_height = 20
+        
+        # Фон бару
+        pygame.draw.rect(screen, BAR_BG, (50, height//2 + 80, bar_width, bar_height))
+        # Заповнення бару
+        pygame.draw.rect(screen, HIGHLIGHT, (50, height//2 + 80, bar_width * progress, bar_height))
+
+        pygame.display.flip()
+        
+        # Рандомна затримка для "ефекту заліза"
+        time.sleep(random.uniform(0.2, 0.6))
+
+    time.sleep(0.5) # Пауза перед самим стартом
 
 class Chip8:
     def __init__(self):
@@ -344,49 +371,120 @@ def select_rom():
     file_path = filedialog.askopenfilename(title="Виберіть ROM-файл", filetypes=[("All Files", "*.ch8")])
     return file_path
 
-# Налаштування вікна
-SCALE = 15  # Кожен піксель Chip-8 буде як 15x15 справжніх пікселів
-WIDTH = 64 * SCALE
-HEIGHT = 32 * SCALE
+def generate_cyberpunk_beep():
+    # Математична генерація звуку (Square wave 440 Hz)
+    sample_rate = 44100
+    duration = 0.1  # Довжина одного "біпу"
+    n_samples = int(sample_rate * duration)
+    buf = array.array('h', [0] * n_samples)
+    
+    for i in range(n_samples):
+        # Робимо трохи агресивний, різкий звук (електронний)
+        if int((float(i) / sample_rate) * 440 * 2) % 2 == 0:
+            buf[i] = 16383
+        else:
+            buf[i] = -16384
+            
+    return pygame.mixer.Sound(buf)
 
 if __name__ == "__main__":
-    loading() 
+    # Ініціалізація графіки та звуку
+    pygame.init()
+    pygame.mixer.init(frequency=44100, size=-16, channels=1)
+    beep_sound = generate_cyberpunk_beep()
+    beep_sound.play() # Тестовий гудок системи!
+
+    SCALE = 15
+    WIDTH = 64 * SCALE
+    HEIGHT = 32 * SCALE
+    
+    screen = pygame.display.set_mode((WIDTH, HEIGHT))
+    pygame.display.set_caption("YCsys CHIP-8 [CYBERPUNK EDITION]")
+    clock = pygame.time.Clock()
+
+    # Запускаємо завантажувальний екран YCsys
+    pygame_boot_screen(screen, clock, WIDTH, HEIGHT)
+
     selected_file = select_rom()
-    print(f"Ви вибрали файл: {selected_file}")
+    if not selected_file:
+        print("Вихід із системи.")
+        pygame.quit()
+        sys.exit()
+
     chip8 = Chip8()
     chip8.load_rom(selected_file) 
-    pygame.init()
-    screen = pygame.display.set_mode((WIDTH, HEIGHT))
-    pygame.display.set_caption("YCsys CHIP-8 Emulator")
-    clock = pygame.time.Clock() # Для контролю швидкості роботи програми
+
+    KEY_MAP = {
+        pygame.K_1: 0x1, pygame.K_2: 0x2, pygame.K_3: 0x3, pygame.K_4: 0xC,
+        pygame.K_q: 0x4, pygame.K_w: 0x5, pygame.K_e: 0x6, pygame.K_r: 0xD,
+        pygame.K_a: 0x7, pygame.K_s: 0x8, pygame.K_d: 0x9, pygame.K_f: 0xE,
+        pygame.K_z: 0xA, pygame.K_x: 0x0, pygame.K_c: 0xB, pygame.K_v: 0xF
+    }
+
+    # КІБЕРПАНК КОЛЬОРИ
+    BG_COLOR = (10, 5, 20)          # Темний фіолетово-чорний фон
+    CORE_COLOR = (0, 255, 255)      # Неоновий Cyan (серцевина пікселя)
+    GLOW_COLOR = (0, 100, 255)      # Синє світіння
+
+    # Поверхня для ефекту згасання (Trails/Motion Blur)
+    trail_surface = pygame.Surface((WIDTH, HEIGHT))
+    trail_surface.fill(BG_COLOR)
+    trail_surface.set_alpha(85)     # Чим менше число, тим довший слід залишається
+
     running = True
     while running:
-        # 1. Обробка подій (закриття вікна)
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
+            
+            if event.type == pygame.KEYDOWN:
+                if event.key in KEY_MAP:
+                    chip8.keys[KEY_MAP[event.key]] = 1
+                if event.key == pygame.K_ESCAPE:
+                    running = False
+            
+            if event.type == pygame.KEYUP:
+                if event.key in KEY_MAP:
+                    chip8.keys[KEY_MAP[event.key]] = 0
 
-        # 2. Виконання циклу процесора
-        # Для комфортної гри треба робити кілька циклів за один кадр
+        # Швидкість гри (10 інструкцій на кадр)
         for _ in range(10): 
             chip8.cycle()
 
-        # 3. Оновлення таймерів (60 разів на секунду)
+        # Робота таймерів
         if chip8.delay_timer > 0:
             chip8.delay_timer -= 1
+            
         if chip8.sound_timer > 0:
+            # Якщо таймер звуку активний і звук ще не грає — запускаємо біп
+            if not pygame.mixer.get_busy():
+                beep_sound.play()
             chip8.sound_timer -= 1
 
-        # 4. Малювання екрана
-        screen.fill((0, 0, 0)) # Очищаємо екран в чорний
+        # --- РЕНДЕРИНГ КІБЕРПАНКУ ---
+        
+        # 1. Ефект "шлейфу". Замість screen.fill ми накладаємо напівпрозорий фон
+        screen.blit(trail_surface, (0, 0))
+        
+        # 2. Малювання пікселів зі світінням
         for x in range(64):
             for y in range(32):
                 if chip8.display[x][y] == 1:
-                    # Малюємо квадрат (піксель) кольору "Neon Green" або "Cyberpunk Purple"
-                    pygame.draw.rect(screen, (0, 255, 65), (x * SCALE, y * SCALE, SCALE, SCALE))
+                    pos_x = x * SCALE
+                    pos_y = y * SCALE
+                    
+                    # Малюємо ауру світіння (трохи більший квадрат)
+                    pygame.draw.rect(screen, GLOW_COLOR, (pos_x - 2, pos_y - 2, SCALE + 4, SCALE + 4), border_radius=4)
+                    
+                    # Малюємо яскраву серцевину пікселя
+                    pygame.draw.rect(screen, CORE_COLOR, (pos_x + 1, pos_y + 1, SCALE - 2, SCALE - 2), border_radius=2)
 
-        pygame.display.flip() # Виводимо все намальоване на монітор
-        clock.tick(60)        # Обмежуємо до 60 кадрів на секунду
+        # 3. Ефект Сканлайнів (Scanlines)
+        for y_line in range(0, HEIGHT, 4):
+            pygame.draw.line(screen, (0, 0, 0), (0, y_line), (WIDTH, y_line), 1)
 
-    print("Програма завершує роботу...") ; time.sleep(2)
+        pygame.display.flip()
+        clock.tick(60)
+
     pygame.quit()
+    sys.exit()
