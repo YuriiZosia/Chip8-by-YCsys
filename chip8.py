@@ -392,19 +392,18 @@ if __name__ == "__main__":
     pygame.init()
     pygame.mixer.init(frequency=44100, size=-16, channels=1)
     beep_sound = generate_cyberpunk_beep()
-    beep_sound.play() # Тестовий гудок системи!
+    beep_sound.play() 
 
     SCALE = 15
     WIDTH = 64 * SCALE
-    UI_WIDTH = 120  # Зменшена ширина панелі
+    UI_WIDTH = 120  
     HEIGHT = 32 * SCALE
-    paused = False  # Змінна стану для паузи
+    paused = False  
     
     screen = pygame.display.set_mode((WIDTH + UI_WIDTH, HEIGHT))
     pygame.display.set_caption("YCsys CHIP-8 [CYBERPUNK EDITION]")
     clock = pygame.time.Clock()
 
-    # Запускаємо завантажувальний екран YCsys
     pygame_boot_screen(screen, clock, WIDTH + UI_WIDTH, HEIGHT)
 
     selected_file = select_rom()
@@ -424,17 +423,21 @@ if __name__ == "__main__":
     }
 
     # КІБЕРПАНК КОЛЬОРИ
-    BG_COLOR = (10, 5, 20)          # Темний фіолетово-чорний фон
-    CORE_COLOR = (0, 255, 255)      # Неоновий Cyan (серцевина пікселя)
-    GLOW_COLOR = (0, 100, 255)      # Синє світіння
+    BG_COLOR = (10, 5, 20)
+    CORE_COLOR = (0, 255, 255)
+    GLOW_COLOR = (0, 100, 255)
+    UI_BG = (20, 20, 30)
+    UI_ACCENT = (0, 255, 100)
 
-    # Поверхня для ефекту згасання (Trails/Motion Blur)
     trail_surface = pygame.Surface((WIDTH, HEIGHT))
     trail_surface.fill(BG_COLOR)
-    trail_surface.set_alpha(65)     # Чим менше число, тим довший слід залишається
+    trail_surface.set_alpha(65)
 
-    # Шрифт для інформації (ініціалізуємо один раз перед циклом)
-    font_debug = pygame.font.SysFont("courier", 18, bold=True)
+    font_debug = pygame.font.SysFont("courier", 16, bold=True)
+    font_status = pygame.font.SysFont("courier", 18, bold=True)
+
+    # Визначаємо зону кнопки RESET
+    reset_btn_rect = pygame.Rect(WIDTH + 10, HEIGHT - 100, UI_WIDTH - 20, 30)
 
     running = True
     while running:
@@ -442,90 +445,87 @@ if __name__ == "__main__":
             if event.type == pygame.QUIT:
                 running = False
             
+            # Обробка миші (Кнопка RESET)
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if reset_btn_rect.collidepoint(event.pos):
+                    print_debug_info(">> RESET VIA MOUSE <<")
+                    chip8 = Chip8()
+                    chip8.load_rom(selected_file)
+                    paused = False
+
             if event.type == pygame.KEYDOWN:
                 if event.key in KEY_MAP:
                     chip8.keys[KEY_MAP[event.key]] = 1
                 if event.key == pygame.K_ESCAPE:
                     running = False
                 
-                # Обробка паузи на клавішу пробілу
                 if event.key == pygame.K_SPACE:
                     paused = not paused
-                    status = "ПАУЗА" if paused else "ГРА"
-                    print_debug_info(f">> Стан системи: {status}")
+                    print_debug_info(f">> Стан системи: {'ПАУЗА' if paused else 'ГРА'}")
 
-                # Обробка перезавантаження на Backspace
                 if event.key == pygame.K_BACKSPACE:
-                    print_debug_info(">> ПЕРЕЗАВАНТАЖЕННЯ СИСТЕМИ <<")
-                    chip8 = Chip8()               # Створюємо чистий процесор
-                    chip8.load_rom(selected_file) # Завантажуємо ту ж саму гру
-                    paused = False                # Знімаємо з паузи
+                    print_debug_info(">> ПЕРЕЗАВАНТАЖЕННЯ (BACKSPACE) <<")
+                    chip8 = Chip8()
+                    chip8.load_rom(selected_file)
+                    paused = False
             
             if event.type == pygame.KEYUP:
                 if event.key in KEY_MAP:
                     chip8.keys[KEY_MAP[event.key]] = 0
 
-        # Виконуємо логіку процесора ТІЛЬКИ якщо не на паузі
         if not paused:
-            # Швидкість гри (10 інструкцій на кадр)
             for _ in range(10): 
                 chip8.cycle()
 
-            # Робота таймерів
             if chip8.delay_timer > 0:
                 chip8.delay_timer -= 1
-                
             if chip8.sound_timer > 0:
-                # Якщо таймер звуку активний і звук ще не грає — запускаємо біп
                 if not pygame.mixer.get_busy():
                     beep_sound.play()
                 chip8.sound_timer -= 1
 
-        # --- РЕНДЕРИНГ КІБЕРПАНКУ ---
-        
-        # 1. Ефект "шлейфу". Замість screen.fill ми накладаємо напівпрозорий фон
+        # --- МАЛЮВАННЯ ГРИ ---
         screen.blit(trail_surface, (0, 0))
-
-        # 2. Малювання пікселів зі світінням
         for x in range(64):
             for y in range(32):
                 if chip8.display[x][y] == 1:
-                    pos_x = x * SCALE
-                    pos_y = y * SCALE
-                    
-                    # Малюємо ауру світіння
-                    pygame.draw.rect(screen, GLOW_COLOR, (pos_x - 2, pos_y - 2, SCALE + 4, SCALE + 4), border_radius=4)
-                    
-                    # Малюємо яскраву серцевину пікселя
-                    pygame.draw.rect(screen, CORE_COLOR, (pos_x + 1, pos_y + 1, SCALE - 2, SCALE - 2), border_radius=2)
+                    pos_x, pos_y = x * SCALE, y * SCALE
+                    pygame.draw.rect(screen, GLOW_COLOR, (pos_x-2, pos_y-2, SCALE+4, SCALE+4), border_radius=4)
+                    pygame.draw.rect(screen, CORE_COLOR, (pos_x+1, pos_y+1, SCALE-2, SCALE-2), border_radius=2)
 
-        # 3. Ефект Сканлайнів (Scanlines)
         for y_line in range(0, HEIGHT, 4):
             pygame.draw.line(screen, (0, 0, 0), (0, y_line), (WIDTH, y_line), 1)
 
-        # --- РЕНДЕРИНГ DEBUG ПАНЕЛІ (YCsys UI) ---
-        
-        # Замальовуємо фон панелі
-        pygame.draw.rect(screen, (20, 20, 30), (WIDTH, 0, UI_WIDTH, HEIGHT))
-        # Розділювальна лінія
-        pygame.draw.line(screen, (0, 255, 100), (WIDTH, 0), (WIDTH, HEIGHT), 2) 
+        # --- РЕНДЕРИНГ UI ПАНЕЛІ ---
+        pygame.draw.rect(screen, UI_BG, (WIDTH, 0, UI_WIDTH, HEIGHT))
+        pygame.draw.line(screen, UI_ACCENT, (WIDTH, 0), (WIDTH, HEIGHT), 2) 
 
-        # Виводимо регістри V0 - VF
+        # Регістри V0-VF
         for i in range(16):
             val = chip8.v_registers[i]
-            # Форматуємо рядок: V0:00
-            text_surf = font_debug.render(f"V{i:X}:{val:02X}", True, (0, 255, 255))
-            screen.blit(text_surf, (WIDTH + 10, 10 + (i * 20)))
+            reg_text = font_debug.render(f"V{i:X}:{val:02X}", True, (0, 255, 255))
+            screen.blit(reg_text, (WIDTH + 10, 10 + (i * 18)))
 
-        # Вивід PC
+        # Стан ПАУЗИ
+        if paused:
+            pause_surf = font_status.render("PAUSED", True, (255, 0, 0))
+            screen.blit(pause_surf, (WIDTH + 25, HEIGHT - 130))
+        else:
+            run_surf = font_status.render("RUNNING", True, (0, 255, 100))
+            screen.blit(run_surf, (WIDTH + 20, HEIGHT - 130))
+
+        # Кнопка RESET
+        pygame.draw.rect(screen, (40, 40, 60), reset_btn_rect, border_radius=5)
+        pygame.draw.rect(screen, UI_ACCENT, reset_btn_rect, 1, border_radius=5)
+        reset_text = font_debug.render(" RESET ", True, UI_ACCENT)
+        screen.blit(reset_text, (WIDTH + 28, HEIGHT - 95))
+
+        # PC та I
         pc_surf = font_debug.render(f"PC:{chip8.pc:03X}", True, (252, 213, 53))
         screen.blit(pc_surf, (WIDTH + 10, HEIGHT - 50))
-
-        # Вивід Index Register
         idx_surf = font_debug.render(f"I: {chip8.index_register:03X}", True, (252, 213, 53))
         screen.blit(idx_surf, (WIDTH + 10, HEIGHT - 30))
 
-        # Вивід на екран
         pygame.display.flip()
         clock.tick(60)
 
