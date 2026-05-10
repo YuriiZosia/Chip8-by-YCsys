@@ -14,6 +14,11 @@
 
 ### `YCsys Edition [CYBERPUNK]`
 
+<img src="https://img.shields.io/badge/Python-3.13+-00ff99?style=for-the-badge&logo=python&logoColor=black">
+<img src="https://img.shields.io/badge/Pygame-Engine-ff0080?style=for-the-badge">
+<img src="https://img.shields.io/badge/Status-Completed-00ccff?style=for-the-badge">
+<img src="https://img.shields.io/badge/Retro-Cyberpunk-9900ff?style=for-the-badge">
+
 > ### *"Код, що працює, а не існує."*
 > 
 > 
